@@ -152,10 +152,11 @@ def copiar_archivos(origen, destino, dry_run=False):
     """Copia archivos importantes de origen a destino"""
     origen_path = Path(origen)
     destino_path = Path(destino)
+    archivos_copiados = 0
 
     if not origen_path.exists():
         logging.warning(f"Origen no existe: {origen}")
-        return
+        return 0
 
     try:
         for root, dirs, files in os.walk(origen_path):
@@ -174,15 +175,19 @@ def copiar_archivos(origen, destino, dry_run=False):
                     destino_archivo.parent.mkdir(parents=True, exist_ok=True)
 
                     if dry_run:
-                        logging.info(f"Simular copia: {archivo} -> {destino_archivo}")
+                        logging.debug(f"Simular copia: {archivo} -> {destino_archivo}")
                     else:
                         try:
                             shutil.copy2(archivo, destino_archivo)
-                            logging.info(f"Copiado: {archivo} -> {destino_archivo}")
+                            logging.debug(f"Copiado: {archivo} -> {destino_archivo}")
                         except (OSError, PermissionError) as e:
                             logging.error(f"Error copiando {archivo}: {e}")
+                            continue
+                    archivos_copiados += 1
     except (OSError, PermissionError) as e:
         logging.error(f"Error accediendo a {origen_path}: {e}")
+
+    return archivos_copiados
 
 def crear_backup(destino_base="./backups"):
     """Función principal para crear backup"""
@@ -216,6 +221,7 @@ def crear_backup(destino_base="./backups"):
         return
 
     # Copiar archivos
+    total_archivos = 0
     for unidad in unidades:
         directorios = directorios_importantes_por_unidad(unidad)
         for directorio in directorios:
@@ -223,9 +229,9 @@ def crear_backup(destino_base="./backups"):
             destino = respaldo_base / f"unidad-{Path(unidad).drive.strip(':')}" / nombre_relativo
 
             logging.info(f"Copiando {directorio} -> {destino}")
-            copiar_archivos(directorio, destino, dry_run=True)  # Cambia a False para copia real
+            total_archivos += copiar_archivos(directorio, destino, dry_run=True)  # Cambia a False para copia real
 
-    logging.info("Backup completado.")
+    logging.info(f"Backup completado. Total archivos procesados: {total_archivos}")
 
 if __name__ == "__main__":
     import sys
