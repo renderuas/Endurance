@@ -1,44 +1,68 @@
-# Endurance Migration Tool
+﻿# Endurance Migration Tool
 
-Batería de scripts en Python para automatizar la migración de un entorno Windows antiguo a una nueva arquitectura.
+Scripts en Python para auditar y respaldar un entorno Windows antes de una migracion.
 
-## Fases del Proyecto
+## Alcance actual
 
-1. **Fase 1: Auditoría e Inventario (Discovery)**
-   - Exportación de software instalado (Winget y Registro).
-   - Análisis de almacenamiento y detección de archivos pesados.
-   - Identificación de archivos duplicados (MD5/SHA256).
-   - Localización de configuraciones esenciales.
+### Fase 1: Auditoria e inventario
+- Exporta aplicaciones instaladas desde `winget` cuando esta disponible.
+- Exporta aplicaciones detectadas en el registro de Windows desde `HKLM` 64-bit, `HKLM` Wow6432Node y `HKCU`.
+- Genera artefactos en `outputs/discovery/`.
 
-2. **Fase 2: Extracción y Respaldo (Backup)**
-   - Escaneo inteligente de unidades montadas (excluye NAS W:, X:, Y:, Z:).
-   - Copia selectiva de archivos importantes (documentos, multimedia, configuraciones).
-   - Exclusión de carpetas temporales y basura (Temp, Cache, Recycle.Bin, Windows, etc.).
-   - Estructura organizada en `backups/YYYY-MM-DD/` (un directorio por día).
-   - Modo simulación por defecto (`dry_run=True`) para pruebas seguras.
-
-3. **Fase 3: Restauración y Despliegue (Restore)**
-   - Instalación masiva vía Winget.
-   - Restauración de configuraciones.
+### Fase 2: Backup selectivo
+- Escanea unidades montadas en Windows y excluye drives configurados, como NAS o externos.
+- Copia solo archivos relevantes segun extension, tamano o antiguedad.
+- Omite carpetas temporales o no deseadas segun `config.yaml`.
+- Organiza el respaldo por fecha en `backups/YYYY-MM-DD/`.
+- Usa `dry_run: true` por defecto para validar el alcance sin copiar archivos ni crear carpetas destino.
 
 ## Requisitos
 - Python 3.10+
-- Plataforma: Windows (requiere acceso a unidades locales).
-- Dependencias: `pip install -r requirements.txt` (pandas, pywin32, pytest).
+- Windows para ejecutar discovery completo y backup real
+- Dependencias: `pip install -r requirements.txt`
+
+## Configuracion
+El comportamiento del backup se controla desde [`config.yaml`](/home/renderuas/Migracion/Endurance/config.yaml).
+
+Ajustes principales:
+- `backup.dry_run`: modo simulacion seguro
+- `backup.exclude_drives`: unidades a omitir
+- `backup.important_extensions`: extensiones que siempre se respaldan
+- `backup.min_file_size_mb`: tamano minimo para incluir archivos grandes
+- `backup.max_file_age_days`: ventana para incluir archivos recientes
+- `backup.exclude_folders`: carpetas o subrutas a excluir
+- `backup.user_directories`: directorios por perfil de usuario
+- `backup.global_directories`: directorios globales a revisar
 
 ## Uso
-Ejecutar los scripts en orden secuencial comenzando por `inventory.py` (fase 1), luego `backup.py` (fase 2).
+Ejecuta primero el inventario y despues el backup.
 
-### backup.py
-- **Comando**: `python backup.py` (destino por defecto: `./backups`)
-- **Destino personalizado**: `python backup.py /ruta/al/destino`
-- **Modo real**: Cambia `dry_run=True` a `False` en el código para copiar archivos de verdad.
-- **Filtro de archivos**: Solo copia archivos con extensiones importantes (.docx, .jpg, .mp4, etc.), >10MB, o modificados en el último año.
-- **Exclusiones**: Unidades NAS se detectan pero se excluyen con mensaje INFO. Carpetas temp/cache se omiten.
-- **Estructura**: Crea subcarpetas por unidad (ej: `unidad-C/Documents/`).
+### Inventario
+```bash
+python inventory.py
+```
 
-## Notas
-- Ejecuta desde PowerShell en Windows para acceso completo a unidades.
-- El backup es selectivo: enfocado en datos de usuario, no en apps o sistema.
-- Para migración completa, combina con `inventory.py` para software y configuraciones.
-- Cambios recientes: Exclusión de NAS, timestamp diario, modo simulación por defecto.
+### Backup
+```bash
+python backup.py
+```
+
+### Destino personalizado
+```bash
+python backup.py D:/migracion/backups
+```
+
+Para ejecutar una copia real, cambia `backup.dry_run` a `false` en `config.yaml`.
+
+## Tests
+```bash
+pytest
+```
+
+La suite valida reglas de exclusion, seleccion de archivos, comportamiento de `dry_run` y parseo del inventario.
+
+## Estructura
+- `inventory.py`: discovery de aplicaciones instaladas
+- `backup.py`: backup selectivo configurable
+- `config.yaml`: configuracion del backup y logging
+- `tests/`: cobertura automatizada de la logica critica
