@@ -15,9 +15,15 @@ def listar_unidades_montadas():
         logging.warning("Listado de unidades solo disponible en Windows.")
         return []
 
+    # Unidades a excluir (ej: NAS)
+    unidades_excluidas = {'W:', 'X:', 'Y:', 'Z:'}
+
     unidades = []
     for letra in string.ascii_uppercase:
         unidad = f"{letra}:\\"
+        if unidad in unidades_excluidas:
+            logging.debug(f"Unidad {unidad} excluida (NAS).")
+            continue
         try:
             os.listdir(unidad)  # Verificar acceso
             unidades.append(unidad)
