@@ -11,7 +11,10 @@ Batería de scripts en Python para automatizar la migración de un entorno Windo
    - Localización de configuraciones esenciales.
 
 2. **Fase 2: Extracción y Respaldo (Backup)**
-   - Copia de seguridad estructurada.
+   - Escaneo inteligente de unidades montadas.
+   - Copia selectiva de archivos importantes (documentos, multimedia, configuraciones).
+   - Exclusión de carpetas temporales y basura.
+   - Estructura organizada en `backups/YYYY-MM-DD/`.
 
 3. **Fase 3: Restauración y Despliegue (Restore)**
    - Instalación masiva vía Winget.
@@ -22,4 +25,4 @@ Batería de scripts en Python para automatizar la migración de un entorno Windo
 - Dependencias: `pip install -r requirements.txt`
 
 ## Uso
-Ejecutar los scripts en orden secuencial comenzando por `src/fase1_discovery/inventory.py`.
+Ejecutar los scripts en orden secuencial comenzando por `inventory.py` (fase 1), luego `backup.py` (fase 2).
