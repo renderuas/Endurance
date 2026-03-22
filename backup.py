@@ -16,16 +16,16 @@ def listar_unidades_montadas():
         return []
 
     # Unidades a excluir (ej: NAS)
-    unidades_excluidas = {'W:', 'X:', 'Y:', 'Z:'}
+    unidades_excluidas = {'W:\\', 'X:\\', 'Y:\\', 'Z:\\'}
 
     unidades = []
     for letra in string.ascii_uppercase:
         unidad = f"{letra}:\\"
-        if unidad in unidades_excluidas:
-            logging.debug(f"Unidad {unidad} excluida (NAS).")
-            continue
         try:
             os.listdir(unidad)  # Verificar acceso
+            if unidad in unidades_excluidas:
+                logging.info(f"Unidad {unidad} encontrada pero excluida (NAS).")
+                continue
             unidades.append(unidad)
         except (OSError, PermissionError):
             logging.debug(f"Unidad {unidad} no accesible, omitiendo.")
@@ -196,7 +196,7 @@ def crear_backup(destino_base="./backups"):
         return
 
     # Crear directorio de respaldo
-    fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    fecha = datetime.now().strftime("%Y-%m-%d")
     respaldo_base = Path(destino_base) / fecha
     respaldo_base.mkdir(parents=True, exist_ok=True)
 
