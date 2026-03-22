@@ -26,3 +26,6 @@ Batería de scripts en Python para automatizar la migración de un entorno Windo
 
 ## Uso
 Ejecutar los scripts en orden secuencial comenzando por `inventory.py` (fase 1), luego `backup.py` (fase 2).
+
+- `python backup.py` (destino por defecto: `./backups`)
+- `python backup.py /ruta/al/destino` (destino personalizado)

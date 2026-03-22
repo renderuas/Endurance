@@ -98,20 +98,34 @@ def es_archivo_importante(archivo):
 
     return False
 
-def excluir_carpeta(carpeta):
-    """Determina si una carpeta debe excluirse"""
-    nombres_excluidos = {
-        'Temp', 'tmp', 'Cache', 'cache', 'Temporary Internet Files',
-        'Recycle.Bin', '$Recycle.Bin', 'System Volume Information',
-        'Windows', 'Program Files', 'Program Files (x86)',
-        'AppData/Local', 'AppData/LocalLow'
-    }
+def estimar_tamaño_backup(directorios):
+    """Estima el tamaño total de los archivos a copiar en MB"""
+    total_bytes = 0
+    archivos_contados = 0
 
-    for parte in carpeta.parts:
-        if parte in nombres_excluidos:
-            return True
+    for directorio in directorios:
+        try:
+            for root, dirs, files in os.walk(directorio):
+                root_path = Path(root)
 
-    return False
+                # Excluir carpetas
+                dirs[:] = [d for d in dirs if not excluir_carpeta(root_path / d)]
+
+                for file in files:
+                    archivo = root_path / file
+                    if es_archivo_importante(archivo):
+                        try:
+                            total_bytes += archivo.stat().st_size
+                            archivos_contados += 1
+                        except (OSError, PermissionError):
+                            pass
+        except (OSError, PermissionError):
+            pass
+
+    total_mb = total_bytes / (1024 * 1024)
+    total_gb = total_mb / 1024
+
+    return total_mb, total_gb, archivos_contados
 
 def copiar_archivos(origen, destino, dry_run=False):
     """Copia archivos importantes de origen a destino"""
@@ -149,7 +163,7 @@ def copiar_archivos(origen, destino, dry_run=False):
     except (OSError, PermissionError) as e:
         logging.error(f"Error accediendo a {origen_path}: {e}")
 
-def crear_backup():
+def crear_backup(destino_base="./backups"):
     """Función principal para crear backup"""
     if platform.system().lower() != "windows":
         logging.error("Backup solo disponible en Windows.")
@@ -157,7 +171,7 @@ def crear_backup():
 
     # Crear directorio de respaldo
     fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    respaldo_base = Path("./backups") / fecha
+    respaldo_base = Path(destino_base) / fecha
     respaldo_base.mkdir(parents=True, exist_ok=True)
 
     logging.info(f"Iniciando backup en: {respaldo_base}")
@@ -165,10 +179,24 @@ def crear_backup():
     unidades = listar_unidades_montadas()
     logging.info(f"Unidades encontradas: {unidades}")
 
+    # Recopilar todos los directorios importantes
+    todos_directorios = []
     for unidad in unidades:
         logging.info(f"Procesando unidad: {unidad}")
         directorios = directorios_importantes_por_unidad(unidad)
+        todos_directorios.extend(directorios)
 
+    # Estimación de tamaño
+    if todos_directorios:
+        mb, gb, num_archivos = estimar_tamaño_backup(todos_directorios)
+        logging.info(f"Estimación: {num_archivos} archivos, ~{mb:.2f} MB ({gb:.2f} GB)")
+    else:
+        logging.warning("No se encontraron directorios importantes para respaldar.")
+        return
+
+    # Copiar archivos
+    for unidad in unidades:
+        directorios = directorios_importantes_por_unidad(unidad)
         for directorio in directorios:
             nombre_relativo = directorio.relative_to(Path(unidad))
             destino = respaldo_base / f"unidad-{Path(unidad).drive.strip(':')}" / nombre_relativo
@@ -179,4 +207,6 @@ def crear_backup():
     logging.info("Backup completado.")
 
 if __name__ == "__main__":
-    crear_backup()
+    import sys
+    destino = sys.argv[1] if len(sys.argv) > 1 else "./backups"
+    crear_backup(destino)
