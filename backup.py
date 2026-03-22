@@ -98,6 +98,21 @@ def es_archivo_importante(archivo):
 
     return False
 
+def excluir_carpeta(carpeta):
+    """Determina si una carpeta debe excluirse"""
+    nombres_excluidos = {
+        'Temp', 'tmp', 'Cache', 'cache', 'Temporary Internet Files',
+        'Recycle.Bin', '$Recycle.Bin', 'System Volume Information',
+        'Windows', 'Program Files', 'Program Files (x86)',
+        'AppData/Local', 'AppData/LocalLow'
+    }
+
+    for parte in carpeta.parts:
+        if parte in nombres_excluidos:
+            return True
+
+    return False
+
 def estimar_tamaño_backup(directorios):
     """Estima el tamaño total de los archivos a copiar en MB"""
     total_bytes = 0
