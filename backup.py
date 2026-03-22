@@ -18,13 +18,11 @@ def listar_unidades_montadas():
     unidades = []
     for letra in string.ascii_uppercase:
         unidad = f"{letra}:\\"
-        if os.path.exists(unidad):
-            try:
-                # Verificar si es accesible
-                os.listdir(unidad)
-                unidades.append(unidad)
-            except PermissionError:
-                logging.warning(f"Unidad {unidad} no accesible (permisos).")
+        try:
+            os.listdir(unidad)  # Verificar acceso
+            unidades.append(unidad)
+        except (OSError, PermissionError):
+            logging.debug(f"Unidad {unidad} no accesible, omitiendo.")
     return unidades
 
 def directorios_importantes_por_unidad(unidad):
@@ -35,20 +33,26 @@ def directorios_importantes_por_unidad(unidad):
     # Directorios de usuario (si existe Users)
     users_dir = base / "Users"
     if users_dir.exists():
-        for user_dir in users_dir.iterdir():
-            if user_dir.is_dir():
-                user_paths = [
-                    user_dir / "Documents",
-                    user_dir / "Desktop",
-                    user_dir / "Downloads",
-                    user_dir / "Pictures",
-                    user_dir / "Videos",
-                    user_dir / "Music",
-                    user_dir / "AppData" / "Roaming",  # Configuraciones útiles
-                ]
-                for path in user_paths:
-                    if path.exists():
-                        importantes.append(path)
+        try:
+            for user_dir in users_dir.iterdir():
+                if user_dir.is_dir():
+                    user_paths = [
+                        user_dir / "Documents",
+                        user_dir / "Desktop",
+                        user_dir / "Downloads",
+                        user_dir / "Pictures",
+                        user_dir / "Videos",
+                        user_dir / "Music",
+                        user_dir / "AppData" / "Roaming",  # Configuraciones útiles
+                    ]
+                    for path in user_paths:
+                        try:
+                            if path.exists():
+                                importantes.append(path)
+                        except (OSError, PermissionError):
+                            logging.debug(f"Directorio {path} no accesible, omitiendo.")
+        except (OSError, PermissionError):
+            logging.debug(f"No se puede acceder a {users_dir}, omitiendo.")
 
     # Otros directorios globales importantes
     global_paths = [
@@ -56,8 +60,11 @@ def directorios_importantes_por_unidad(unidad):
         base / "Public",  # Archivos públicos
     ]
     for path in global_paths:
-        if path.exists():
-            importantes.append(path)
+        try:
+            if path.exists():
+                importantes.append(path)
+        except (OSError, PermissionError):
+            logging.debug(f"Directorio {path} no accesible, omitiendo.")
 
     return importantes
 
@@ -115,29 +122,32 @@ def copiar_archivos(origen, destino, dry_run=False):
         logging.warning(f"Origen no existe: {origen}")
         return
 
-    for root, dirs, files in os.walk(origen_path):
-        root_path = Path(root)
+    try:
+        for root, dirs, files in os.walk(origen_path):
+            root_path = Path(root)
 
-        # Excluir carpetas
-        dirs[:] = [d for d in dirs if not excluir_carpeta(root_path / d)]
+            # Excluir carpetas
+            dirs[:] = [d for d in dirs if not excluir_carpeta(root_path / d)]
 
-        for file in files:
-            archivo = root_path / file
-            if es_archivo_importante(archivo):
-                # Crear estructura relativa
-                relativa = archivo.relative_to(origen_path)
-                destino_archivo = destino_path / relativa
+            for file in files:
+                archivo = root_path / file
+                if es_archivo_importante(archivo):
+                    # Crear estructura relativa
+                    relativa = archivo.relative_to(origen_path)
+                    destino_archivo = destino_path / relativa
 
-                destino_archivo.parent.mkdir(parents=True, exist_ok=True)
+                    destino_archivo.parent.mkdir(parents=True, exist_ok=True)
 
-                if dry_run:
-                    logging.info(f"Simular copia: {archivo} -> {destino_archivo}")
-                else:
-                    try:
-                        shutil.copy2(archivo, destino_archivo)
-                        logging.info(f"Copiado: {archivo} -> {destino_archivo}")
-                    except Exception as e:
-                        logging.error(f"Error copiando {archivo}: {e}")
+                    if dry_run:
+                        logging.info(f"Simular copia: {archivo} -> {destino_archivo}")
+                    else:
+                        try:
+                            shutil.copy2(archivo, destino_archivo)
+                            logging.info(f"Copiado: {archivo} -> {destino_archivo}")
+                        except (OSError, PermissionError) as e:
+                            logging.error(f"Error copiando {archivo}: {e}")
+    except (OSError, PermissionError) as e:
+        logging.error(f"Error accediendo a {origen_path}: {e}")
 
 def crear_backup():
     """Función principal para crear backup"""
@@ -164,7 +174,7 @@ def crear_backup():
             destino = respaldo_base / f"unidad-{Path(unidad).drive.strip(':')}" / nombre_relativo
 
             logging.info(f"Copiando {directorio} -> {destino}")
-            copiar_archivos(directorio, destino, dry_run=False)  # Cambia a True para simular
+            copiar_archivos(directorio, destino, dry_run=True)  # Cambia a False para copia real
 
     logging.info("Backup completado.")
 
