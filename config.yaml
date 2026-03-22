@@ -1,0 +1,85 @@
+# Endurance Backup Configuration
+# Modifica este archivo para personalizar el comportamiento del backup
+
+backup:
+  # Modo simulación: true = no copia (solo prueba), false = copia de verdad
+  dry_run: true
+
+  # Unidades a excluir (NAS, drives externos, etc.)
+  exclude_drives:
+    - W
+    - X
+    - Y
+    - Z
+
+  # Extensiones de archivos importantes a respaldar
+  important_extensions:
+    - .doc
+    - .docx
+    - .pdf
+    - .txt
+    - .xls
+    - .xlsx
+    - .ppt
+    - .pptx
+    - .jpg
+    - .jpeg
+    - .png
+    - .gif
+    - .bmp
+    - .tiff
+    - .mp4
+    - .avi
+    - .mkv
+    - .mov
+    - .zip
+    - .rar
+    - .7z
+    - .json
+    - .xml
+    - .ini
+    - .cfg
+
+  # Tamaño mínimo de archivo en MB (archivos > a esto se respaldan)
+  min_file_size_mb: 10
+
+  # Antigüedad máxima en días (archivos modificados hace < esto se respaldan)
+  max_file_age_days: 365
+
+  # Carpetas a excluir del respaldo
+  exclude_folders:
+    - Temp
+    - tmp
+    - Cache
+    - cache
+    - Temporary Internet Files
+    - Recycle.Bin
+    - $Recycle.Bin
+    - System Volume Information
+    - Windows
+    - Program Files
+    - Program Files (x86)
+    - AppData/Local
+    - AppData/LocalLow
+
+  # Directorios de usuario a respaldar (relativos a C:\Users\username\)
+  user_directories:
+    - Documents
+    - Desktop
+    - Downloads
+    - Pictures
+    - Videos
+    - Music
+    - AppData/Roaming
+
+  # Directorios globales a respaldar
+  global_directories:
+    - ProgramData
+    - Public
+
+# Logging
+logging:
+  # Nivel de logging: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  # Formato de logs
+  format: '%(asctime)s - %(levelname)s - %(message)s'

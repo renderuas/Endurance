@@ -5,9 +5,39 @@ import shutil
 import string
 from datetime import datetime
 from pathlib import Path
+import yaml
 
-# Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Variables globales para la configuración
+config = {}
+
+def cargar_configuracion(archivo_config="config.yaml"):
+    """Carga la configuración desde un archivo YAML"""
+    global config
+    config_path = Path(archivo_config)
+    
+    if not config_path.exists():
+        print(f"Archivo de configuración no encontrado: {archivo_config}")
+        return False
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        print(f"Configuración cargada desde: {archivo_config}")
+        return True
+    except Exception as e:
+        print(f"Error cargando configuración: {e}")
+        return False
+
+def configurar_logging():
+    """Configura el logging basado en la configuración"""
+    if config and 'logging' in config:
+        level = getattr(logging, config['logging'].get('level', 'INFO').upper())
+        format_str = config['logging'].get('format', '%(asctime)s - %(levelname)s - %(message)s')
+    else:
+        level = logging.INFO
+        format_str = '%(asctime)s - %(levelname)s - %(message)s'
+    
+    logging.basicConfig(level=level, format=format_str, force=True)
 
 def listar_unidades_montadas():
     """Lista unidades montadas en Windows (C:, D:, etc.)"""
@@ -15,16 +45,17 @@ def listar_unidades_montadas():
         logging.warning("Listado de unidades solo disponible en Windows.")
         return []
 
-    # Unidades a excluir (ej: NAS)
-    unidades_excluidas = {'W:\\', 'X:\\', 'Y:\\', 'Z:\\'}
+    # Unidades a excluir desde configuración
+    exclude_drives = config.get('backup', {}).get('exclude_drives', ['W', 'X', 'Y', 'Z'])
+    unidades_excluidas = {f"{d}:\\" for d in exclude_drives}
 
     unidades = []
     for letra in string.ascii_uppercase:
         unidad = f"{letra}:\\"
         try:
-            os.listdir(unidad)  # Verificar acceso
+            os.listdir(unidad)
             if unidad in unidades_excluidas:
-                logging.info(f"Unidad {unidad} encontrada pero excluida (NAS).")
+                logging.info(f"Unidad {unidad} encontrada pero excluida (configuración).")
                 continue
             unidades.append(unidad)
         except (OSError, PermissionError):
@@ -36,22 +67,20 @@ def directorios_importantes_por_unidad(unidad):
     base = Path(unidad)
     importantes = []
 
+    # Directorios de usuario y globales desde configuración
+    user_dirs = config.get('backup', {}).get('user_directories', [])
+    global_dirs = config.get('backup', {}).get('global_directories', [])
+
     # Directorios de usuario (si existe Users)
     users_dir = base / "Users"
     if users_dir.exists():
         try:
             for user_dir in users_dir.iterdir():
                 if user_dir.is_dir():
-                    user_paths = [
-                        user_dir / "Documents",
-                        user_dir / "Desktop",
-                        user_dir / "Downloads",
-                        user_dir / "Pictures",
-                        user_dir / "Videos",
-                        user_dir / "Music",
-                        user_dir / "AppData" / "Roaming",  # Configuraciones útiles
-                    ]
-                    for path in user_paths:
+                    for dir_name in user_dirs:
+                        path = user_dir
+                        for part in dir_name.split('/'):
+                            path = path / part
                         try:
                             if path.exists():
                                 importantes.append(path)
@@ -60,12 +89,9 @@ def directorios_importantes_por_unidad(unidad):
         except (OSError, PermissionError):
             logging.debug(f"No se puede acceder a {users_dir}, omitiendo.")
 
-    # Otros directorios globales importantes
-    global_paths = [
-        base / "ProgramData",  # Configuraciones globales
-        base / "Public",  # Archivos públicos
-    ]
-    for path in global_paths:
+    # Directorios globales
+    for dir_name in global_dirs:
+        path = base / dir_name
         try:
             if path.exists():
                 importantes.append(path)
@@ -79,25 +105,23 @@ def es_archivo_importante(archivo):
     if not archivo.is_file():
         return False
 
-    # Extensiones importantes
-    extensiones_importantes = {
-        '.doc', '.docx', '.pdf', '.txt', '.xls', '.xlsx', '.ppt', '.pptx',
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff',
-        '.mp4', '.avi', '.mkv', '.mov',
-        '.zip', '.rar', '.7z',
-        '.json', '.xml', '.ini', '.cfg'
-    }
+    # Extensiones importantes desde configuración
+    extensiones_importantes = set(config.get('backup', {}).get('important_extensions', []))
 
     if archivo.suffix.lower() in extensiones_importantes:
         return True
 
-    # Archivos grandes (>10MB) o recientes (<1 año)
+    # Parámetros desde configuración
+    min_size_mb = config.get('backup', {}).get('min_file_size_mb', 10)
+    max_age_days = config.get('backup', {}).get('max_file_age_days', 365)
+
+    # Archivos grandes o recientes
     try:
         stat = archivo.stat()
         tamaño_mb = stat.st_size / (1024 * 1024)
         edad_dias = (datetime.now() - datetime.fromtimestamp(stat.st_mtime)).days
 
-        if tamaño_mb > 10 or edad_dias < 365:
+        if tamaño_mb > min_size_mb or edad_dias < max_age_days:
             return True
     except OSError:
         pass
@@ -106,12 +130,7 @@ def es_archivo_importante(archivo):
 
 def excluir_carpeta(carpeta):
     """Determina si una carpeta debe excluirse"""
-    nombres_excluidos = {
-        'Temp', 'tmp', 'Cache', 'cache', 'Temporary Internet Files',
-        'Recycle.Bin', '$Recycle.Bin', 'System Volume Information',
-        'Windows', 'Program Files', 'Program Files (x86)',
-        'AppData/Local', 'AppData/LocalLow'
-    }
+    nombres_excluidos = set(config.get('backup', {}).get('exclude_folders', []))
 
     for parte in carpeta.parts:
         if parte in nombres_excluidos:
@@ -220,6 +239,10 @@ def crear_backup(destino_base="./backups"):
         logging.warning("No se encontraron directorios importantes para respaldar.")
         return
 
+    # Obtener modo dry_run desde configuración
+    dry_run = config.get('backup', {}).get('dry_run', True)
+    logging.info(f"Modo simulación: {dry_run}")
+
     # Copiar archivos
     total_archivos = 0
     for unidad in unidades:
@@ -229,11 +252,21 @@ def crear_backup(destino_base="./backups"):
             destino = respaldo_base / f"unidad-{Path(unidad).drive.strip(':')}" / nombre_relativo
 
             logging.info(f"Copiando {directorio} -> {destino}")
-            total_archivos += copiar_archivos(directorio, destino, dry_run=True)  # Cambia a False para copia real
+            total_archivos += copiar_archivos(directorio, destino, dry_run=dry_run)
 
     logging.info(f"Backup completado. Total archivos procesados: {total_archivos}")
 
 if __name__ == "__main__":
     import sys
+    
+    # Cargar configuración
+    config_file = "config.yaml"
+    if not cargar_configuracion(config_file):
+        print("No se puede continuar sin configuración.")
+        sys.exit(1)
+    
+    # Configurar logging
+    configurar_logging()
+    
     destino = sys.argv[1] if len(sys.argv) > 1 else "./backups"
     crear_backup(destino)
